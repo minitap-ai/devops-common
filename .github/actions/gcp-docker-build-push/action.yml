@@ -19,6 +19,13 @@ inputs:
   image-name:
     required: true
     description: "Docker image name"
+  image-tag:
+    required: false
+    description: "Docker image tag"
+  dockerfile:
+    required: false
+    description: "Dockerfile path"
+    default: ${{ github.workspace }}/Dockerfile
 runs:
   using: "composite"
   steps:
@@ -42,9 +49,12 @@ runs:
         GCP_PROJECT_ID: ${{ inputs.gcp-project-id }}
         GCP_ARTIFACT_REPO: ${{ inputs.gcp-artifact-repo }}
         IMAGE_NAME: ${{ inputs.image-name }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
       run: |
         IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$GCP_ARTIFACT_REPO/$IMAGE_NAME"
-        if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        if [ ! -z "$IMAGE_TAG" ]; then
+          TAGS="$IMAGE:$IMAGE_TAG"
+        elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           TAGS="$IMAGE:${GITHUB_REF_NAME}"
         elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
           TAGS="$IMAGE:latest"
@@ -72,6 +82,7 @@ runs:
       uses: docker/build-push-action@v6
       with:
         push: true
+        file: ${{ inputs.dockerfile }}
         tags: ${{ steps.vars.outputs.tags }}
         secret-files: |
           netrc=/home/runner/.netrc

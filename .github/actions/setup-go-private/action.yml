@@ -1,0 +1,21 @@
+name: Setup Go with Private Repositories
+description: Configures Go and Git to work with private GitHub packages
+inputs:
+  github-token:
+    required: true
+    description: "GitHub Personal Access Token (GH_PAT)"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Configure Git
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      shell: bash
+      run: |
+        git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+        go env -w GOPRIVATE=github.com/minitap-ai/*

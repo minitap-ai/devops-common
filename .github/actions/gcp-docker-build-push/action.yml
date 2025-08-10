@@ -26,6 +26,10 @@ inputs:
     required: false
     description: "Dockerfile path"
     default: ${{ github.workspace }}/Dockerfile
+  build-context:
+    required: false
+    description: "Docker build context"
+    default: ${{ github.workspace }}
 runs:
   using: "composite"
   steps:
@@ -83,6 +87,7 @@ runs:
       with:
         push: true
         file: ${{ inputs.dockerfile }}
+        context: ${{ inputs.build-context }}
         tags: ${{ steps.vars.outputs.tags }}
         secret-files: |
           netrc=/home/runner/.netrc

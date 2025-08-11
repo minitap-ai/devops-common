@@ -1,0 +1,65 @@
+name: Publish Helm Chart to GCP Artifact Registry
+description: Publish Helm chart to GCP Artifact Registry
+inputs:
+  gcp-credentials:
+    required: true
+    description: "GCP Service Account JSON key"
+  gcp-project-id:
+    required: true
+    description: "GCP Project ID"
+  gcp-region:
+    required: true
+    description: "GCP Region"
+  gcp-artifact-repo:
+    required: true
+    description: "GCP Artifact Container Registry name"
+  chart-path:
+    required: false
+    description: "Path to the Helm chart"
+    default: ${{ github.workspace }}/charts
+  chart-name:
+    required: true
+    description: "Helm chart name"
+  chart-version:
+    required: true
+    description: "Helm chart version"
+runs:
+  using: "composite"
+  steps:
+    - uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ inputs.gcp-credentials }}
+
+    - uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ inputs.gcp-project-id }}
+
+    - name: Configure Docker auth for Artifact Registry
+      shell: bash
+      run: |
+        gcloud auth configure-docker ${{ inputs.gcp-region }}-docker.pkg.dev
+
+    - name: Install Helm
+      shell: bash
+      run: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+    - name: Update Helm chart dependencies
+      shell: bash
+      run: |
+        helm dependency update ${{ inputs.chart-path }}
+
+    - name: Package Helm chart
+      shell: bash
+      run: |
+        helm package ${{ inputs.chart-path }}
+
+    - name: Define chart full path
+      shell: bash
+      run: |
+        echo "CHART_FULL_PATH=${{ inputs.gcp-region }}-docker.pkg.dev/${{ inputs.gcp-project-id }}/${{ inputs.gcp-artifact-repo }}/${{ inputs.chart-name }}" >> $GITHUB_ENV
+
+    - name: Push Helm chart to Artifact Registry
+      shell: bash
+      run: |
+        helm push ${{ github.workspace }}/${{ inputs.chart-name }}-${{ inputs.chart-version }}.tgz oci://${{ env.CHART_FULL_PATH }}

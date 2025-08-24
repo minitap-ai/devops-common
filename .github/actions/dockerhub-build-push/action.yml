@@ -24,6 +24,14 @@ inputs:
     required: false
     description: "Docker build context"
     default: ${{ github.workspace }}
+  platforms:
+    required: false
+    description: "Docker build platforms"
+    default: linux/amd64,linux/arm64
+  push-latest:
+    required: false
+    description: "Push latest tag"
+    default: "true"
 runs:
   using: "composite"
   steps:
@@ -50,7 +58,10 @@ runs:
           TAGS="$IMAGE_NAME:dev"
         else
           echo "No matching condition for build, skipping."
-          exit 0
+          exit 1
+        fi
+        if [ "${PUSH_LATEST}" = "true" ]; then
+          TAGS="$TAGS,$IMAGE_NAME:latest"
         fi
         echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
@@ -70,6 +81,7 @@ runs:
       uses: docker/build-push-action@v6
       with:
         push: true
+        platforms: ${{ inputs.platforms }}
         file: ${{ inputs.dockerfile }}
         context: ${{ inputs.build-context }}
         tags: ${{ steps.vars.outputs.tags }}

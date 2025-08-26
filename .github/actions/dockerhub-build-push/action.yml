@@ -47,6 +47,7 @@ runs:
       env:
         IMAGE_NAME: ${{ inputs.image-name }}
         IMAGE_TAG: ${{ inputs.image-tag }}
+        PUSH_LATEST: ${{ inputs.push-latest }}
       run: |
         if [ ! -z "$IMAGE_TAG" ]; then
           TAGS="$IMAGE_NAME:$IMAGE_TAG"

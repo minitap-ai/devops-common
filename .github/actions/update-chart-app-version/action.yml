@@ -1,0 +1,67 @@
+name: "Update Chart App Version"
+description: "Update the app version in a Chart.yaml file in an ArgoCD-observed repository"
+
+inputs:
+  argocd-repo:
+    description: "Path to the ArgoCD repository"
+    required: true
+  argocd-repo-token:
+    description: "Token for accessing the ArgoCD repository"
+    required: true
+  chart-path:
+    description: "The path to the Chart.yaml file in ArgoCD repository"
+    required: true
+    default: "Chart.yaml"
+  app-version:
+    description: "The new app version to set"
+    required: true
+  app-name:
+    description: "The name of the application (used in commit message)"
+    required: true
+  commit-author:
+    description: "The author of the commit"
+    required: true
+  commit-email:
+    description: "The email of the commit"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set globals
+      id: globals
+      shell: bash
+      run: |
+        echo "CHART_REPO=argocd-repo" >> "${GITHUB_OUTPUT}"
+        echo "CHART_PATH=argocd-repo/${{ inputs.chart-path }}" >> "${GITHUB_OUTPUT}"
+
+    - name: Checkout ArgoCD repository
+      uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.argocd-repo }}
+        token: ${{ inputs.argocd-repo-token }}
+        path: ${{ steps.globals.outputs.CHART_REPO}}
+
+    - name: Update App Version in Chart.yaml file
+      uses: mikefarah/yq@v4
+      with:
+        cmd: yq -i '.appVersion = "${{ inputs.app-version }}"' "${{ steps.globals.outputs.CHART_PATH }}"
+
+    - name: Commit and push changes (if any)
+      shell: bash
+      run: |
+        cd "${{ steps.globals.outputs.CHART_REPO}}"
+
+        git config --global user.name "${{ inputs.commit-author }}"
+        git config --global user.email "${{ inputs.commit-email }}"
+
+        if [[ `git status --porcelain --untracked-files=no` ]]; then
+          # Changes
+          git add "${{ inputs.chart-path }}"
+          git commit -m "feat(${{ inputs.app-name }}): bumped to version ${{ inputs.app-version }}"
+          git push
+        else
+          # No changes
+          echo "No changes to latest app version"
+          exit 0
+        fi

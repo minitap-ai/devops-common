@@ -1,0 +1,46 @@
+name: "Get Latest Tag Info"
+description: "Fetch the latest git tag and extract tag name, author name, and author email"
+
+outputs:
+  tag-name:
+    description: "The name of the latest tag"
+    value: ${{ steps.get_tag_info.outputs.tag-name }}
+  author-name:
+    description: "The name of the tag author"
+    value: ${{ steps.get_tag_info.outputs.author-name }}
+  author-email:
+    description: "The email of the tag author"
+    value: ${{ steps.get_tag_info.outputs.author-email }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Get tag information
+      id: get_tag_info
+      shell: bash
+      run: |
+        # Get the latest tag
+        TAG=$(git describe --tags --abbrev=0)
+        echo "tag-name=$TAG" >> $GITHUB_OUTPUT
+
+        # Try to get author info from annotated tag
+        AUTHOR=$(git tag -l --format='%(taggername)' "$TAG")
+        EMAIL=$(git tag -l --format='%(taggeremail)' "$TAG")
+
+        # If empty (lightweight tag), fall back to commit author
+        if [ -z "$AUTHOR" ]; then
+          AUTHOR=$(git log -1 --format='%an' "$TAG")
+          EMAIL=$(git log -1 --format='%ae' "$TAG")
+        fi
+
+        # Clean up email (remove <>)
+        EMAIL=$(echo "$EMAIL" | sed 's/[<>]//g')
+
+        echo "author-name=$AUTHOR" >> $GITHUB_OUTPUT
+        echo "author-email=$EMAIL" >> $GITHUB_OUTPUT

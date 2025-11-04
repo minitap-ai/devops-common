@@ -30,6 +30,9 @@ inputs:
     required: false
     description: "Docker build context"
     default: ${{ github.workspace }}
+  build-args:
+    required: false
+    description: "Docker build argument"
 runs:
   using: "composite"
   steps:
@@ -89,5 +92,6 @@ runs:
         file: ${{ inputs.dockerfile }}
         context: ${{ inputs.build-context }}
         tags: ${{ steps.vars.outputs.tags }}
+        build-args: ${{ inputs.build-args }}
         secret-files: |
           netrc=/home/runner/.netrc

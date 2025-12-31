@@ -64,7 +64,18 @@ runs:
       run: |
         IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$GCP_ARTIFACT_REPO/$IMAGE_NAME"
         if [ ! -z "$IMAGE_TAG" ]; then
-          TAGS="$IMAGE:$IMAGE_TAG"
+          # Handle multi-line tags (newline separated)
+          TAGS=""
+          while IFS= read -r tag || [ -n "$tag" ]; do
+            tag=$(echo "$tag" | xargs)  # trim whitespace
+            if [ -n "$tag" ]; then
+              if [ -z "$TAGS" ]; then
+                TAGS="$IMAGE:$tag"
+              else
+                TAGS="$TAGS,$IMAGE:$tag"
+              fi
+            fi
+          done <<< "$IMAGE_TAG"
         elif [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           TAGS="$IMAGE:${GITHUB_REF_NAME}"
         elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then

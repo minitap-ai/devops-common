@@ -1,0 +1,136 @@
+name: "ArgoCD Deploy"
+description: "Deploy application via ArgoCD - sync and wait for health"
+
+inputs:
+  argocd-repo:
+    description: "Path to the ArgoCD repository"
+    required: true
+  argocd-repo-token:
+    description: "Token for accessing the ArgoCD repository"
+    required: true
+  commit-author:
+    description: "The author of the commit"
+    required: true
+  commit-email:
+    description: "The email of the commit"
+    required: true
+  argocd-server-url:
+    description: "ArgoCD server URL"
+    required: true
+  argocd-auth-token:
+    description: "ArgoCD authentication token"
+    required: true
+  app-name:
+    description: "ArgoCD application name"
+    required: true
+  environment:
+    description: "Deployment environment (dev/prod)"
+    required: true
+  image-tag:
+    description: "Docker image tag being deployed"
+    required: true
+  sync-timeout:
+    description: "Timeout in seconds for sync wait"
+    required: false
+    default: "300"
+  prune:
+    description: "Enable pruning during sync"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set globals
+      id: globals
+      shell: bash
+      run: |
+        GIT_APP_BASE="apps/${{ inputs.app-name }}/${{ inputs.environment }}"
+        echo "CHART_REPO=argocd-repo" >> "${GITHUB_OUTPUT}"
+        echo "GIT_VALUES_PATH=$GIT_APP_BASE/values.yaml" >> "${GITHUB_OUTPUT}"
+        echo "GIT_CHART_PATH=$GIT_APP_BASE/Chart.yaml" >> "${GITHUB_OUTPUT}"
+        echo "CHART_PATH=argocd-repo/$GIT_CHART_PATH" >> "${GITHUB_OUTPUT}"
+
+    - name: Checkout ArgoCD repository
+      uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.argocd-repo }}
+        token: ${{ inputs.argocd-repo-token }}
+        path: ${{ steps.globals.outputs.CHART_REPO}}
+
+    - name: Update App Version in Chart.yaml file
+      uses: mikefarah/yq@v4
+      with:
+        cmd: yq -i '.appVersion = "${{ inputs.image-tag }}"' "${{ steps.globals.outputs.CHART_PATH }}"
+
+    - name: Update image.tag in values.yaml (for subchart pattern only)
+      shell: bash
+      run: |
+        VALUES_FILE="${{ steps.globals.outputs.GIT_VALUES_PATH }}"
+        if [ -f "$VALUES_FILE" ]; then
+          # Get the chart name from Chart.yaml to use as subchart key
+          CHART_NAME=$(yq '.dependencies[0].name // ""' "${{ steps.globals.outputs.CHART_PATH }}")
+          if [ -n "$CHART_NAME" ]; then
+            # Subchart pattern: set <subchart>.image.tag
+            yq -i ".[\"$CHART_NAME\"].image.tag = \"${{ inputs.image-tag }}\"" "$VALUES_FILE"
+          fi
+          # Skip standalone/prod charts - appVersion in Chart.yaml is sufficient
+        fi
+
+    - name: Commit and push changes (if any)
+      shell: bash
+      run: |
+        cd "${{ steps.globals.outputs.CHART_REPO}}"
+
+        git config --global user.name "${{ inputs.commit-author }}"
+        git config --global user.email "${{ inputs.commit-email }}"
+
+        if [[ `git status --porcelain --untracked-files=no` ]]; then
+          # Changes
+          git add "${{ steps.globals.outputs.GIT_CHART_PATH }}"
+          VALUES_FILE="${{ steps.globals.outputs.GIT_VALUES_PATH }}"
+          if [ -f "$VALUES_FILE" ]; then
+            git add "$VALUES_FILE"
+          fi
+          git commit -m "feat(${{ inputs.environment }}/${{ inputs.app-name }}): bumped to version ${{ inputs.image-tag }}"
+          git push
+        else
+          # No changes
+          echo "No changes to latest app version"
+        fi
+
+    - name: Install ArgoCD CLI
+      shell: bash
+      run: |
+        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x argocd
+        sudo mv argocd /usr/local/bin/
+
+    - name: Trigger ArgoCD sync and wait for health
+      shell: bash
+      run: |
+        PRUNE_FLAG=""
+        if [[ "${{ inputs.prune }}" == "true" ]]; then
+          PRUNE_FLAG="--prune"
+        fi
+
+        argocd app sync ${{ inputs.app-name }} \
+          --server ${{ inputs.argocd-server-url }} \
+          --auth-token ${{ inputs.argocd-auth-token }} \
+          --grpc-web \
+          $PRUNE_FLAG
+
+        argocd app wait ${{ inputs.app-name }} \
+          --server ${{ inputs.argocd-server-url }} \
+          --auth-token ${{ inputs.argocd-auth-token }} \
+          --grpc-web \
+          --health \
+          --timeout ${{ inputs.sync-timeout }}
+
+    - name: Output deployment summary
+      shell: bash
+      run: |
+        echo "### Deployment Complete 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** \`${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Image Tag:** \`${{ inputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY

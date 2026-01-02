@@ -71,13 +71,14 @@ runs:
       run: |
         VALUES_FILE="${{ steps.globals.outputs.VALUES_PATH }}"
         if [ -f "$VALUES_FILE" ]; then
-          # Get the chart name from Chart.yaml to use as subchart key
-          CHART_NAME=$(yq '.dependencies[0].name // ""' "${{ steps.globals.outputs.CHART_PATH }}")
-          if [ -n "$CHART_NAME" ]; then
-            # Subchart pattern: set <subchart>.image.tag
-            yq -i ".[\"$CHART_NAME\"].image.tag = \"${{ inputs.image-tag }}\"" "$VALUES_FILE"
+          # Check if app-name exists as a dependency in Chart.yaml
+          APP_NAME="${{ inputs.app-name }}"
+          HAS_APP_DEPENDENCY=$(yq ".dependencies[] | select(.name == \"$APP_NAME\") | .name" "${{ steps.globals.outputs.CHART_PATH }}")
+          if [ -n "$HAS_APP_DEPENDENCY" ]; then
+            # Subchart pattern: set <app-name>.image.tag only if app is a dependency
+            yq -i ".[\"$APP_NAME\"].image.tag = \"${{ inputs.image-tag }}\"" "$VALUES_FILE"
           fi
-          # Skip standalone/prod charts - appVersion in Chart.yaml is sufficient
+          # Skip charts where app is not a subchart dependency (e.g., prod standalone charts)
         fi
 
     - name: Commit and push changes (if any)

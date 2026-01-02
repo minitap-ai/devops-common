@@ -1,0 +1,62 @@
+name: "Deployment Setup"
+description: "Determine deployment environment and image tag based on git ref type (tag vs branch)"
+
+inputs:
+  prod-branch:
+    description: "Branch that production tags must be on"
+    required: false
+    default: "main"
+
+outputs:
+  environment:
+    description: "Target environment (dev or prod)"
+    value: ${{ steps.env.outputs.environment }}
+  image_tag:
+    description: "Docker image tag to use"
+    value: ${{ steps.env.outputs.image_tag }}
+  commit_author:
+    description: "Author name for commits"
+    value: ${{ steps.env.outputs.commit_author }}
+  commit_email:
+    description: "Author email for commits"
+    value: ${{ steps.env.outputs.commit_email }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Determine environment and image tag
+      id: env
+      shell: bash
+      run: |
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          # Verify tag is on prod branch
+          if ! git merge-base --is-ancestor ${{ github.sha }} origin/${{ inputs.prod-branch }}; then
+            echo "::error::Tag ${{ github.ref_name }} is not on ${{ inputs.prod-branch }} branch. Production releases must be tagged from ${{ inputs.prod-branch }}."
+            exit 1
+          fi
+          echo "environment=prod" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+          # Get author info from annotated tag
+          AUTHOR=$(git tag -l --format='%(taggername)' "${{ github.ref_name }}")
+          EMAIL=$(git tag -l --format='%(taggeremail)' "${{ github.ref_name }}")
+
+          # If empty (lightweight tag), fall back to commit author
+          if [ -z "$AUTHOR" ]; then
+            AUTHOR=$(git log -1 --format='%an' "${{ github.ref_name }}")
+            EMAIL=$(git log -1 --format='%ae' "${{ github.ref_name }}")
+          fi
+
+          # Clean up email (remove <>)
+          EMAIL=$(echo "$EMAIL" | sed 's/[<>]//g')
+        else
+          echo "environment=dev" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+          # Get commit author info
+          AUTHOR=$(git log -1 --format='%an')
+          EMAIL=$(git log -1 --format='%ae')
+        fi
+
+        echo "commit_author=$AUTHOR" >> $GITHUB_OUTPUT
+        echo "commit_email=$EMAIL" >> $GITHUB_OUTPUT

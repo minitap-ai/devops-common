@@ -1,12 +1,6 @@
 name: "Deployment Setup"
 description: "Determine deployment environment and image tag based on git ref type (tag vs branch)"
 
-inputs:
-  prod-branch:
-    description: "Branch that production tags must be on"
-    required: false
-    default: "main"
-
 outputs:
   environment:
     description: "Target environment (dev or prod)"
@@ -29,11 +23,6 @@ runs:
       shell: bash
       run: |
         if [[ "${{ github.ref_type }}" == "tag" ]]; then
-          # Verify tag is on prod branch
-          if ! git merge-base --is-ancestor ${{ github.sha }} origin/${{ inputs.prod-branch }}; then
-            echo "::error::Tag ${{ github.ref_name }} is not on ${{ inputs.prod-branch }} branch. Production releases must be tagged from ${{ inputs.prod-branch }}."
-            exit 1
-          fi
           echo "environment=prod" >> $GITHUB_OUTPUT
           echo "image_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
 

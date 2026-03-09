@@ -1,0 +1,50 @@
+name: Python Database Migrations
+description: Install uv, sync dependencies, and run database migrations for Python projects
+
+inputs:
+  psql-direct-url:
+    required: true
+    description: "Direct PostgreSQL connection URL (bypasses pgbouncer)"
+  supabase-url:
+    required: false
+    description: "Supabase project URL (optional for some services)"
+    default: ""
+  supabase-key:
+    required: false
+    description: "Supabase service key (optional for some services)"
+    default: ""
+  extra-env:
+    required: false
+    description: "Additional environment variables as KEY=VALUE pairs, one per line"
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+
+    - name: Set up Python
+      shell: bash
+      run: uv python install
+
+    - name: Install dependencies
+      shell: bash
+      run: uv sync
+
+    - name: Run migrations
+      shell: bash
+      env:
+        PSQL_DIRECT_URL: ${{ inputs.psql-direct-url }}
+        SUPABASE_URL: ${{ inputs.supabase-url }}
+        SUPABASE_KEY: ${{ inputs.supabase-key }}
+      run: |
+        # Parse extra env vars if provided
+        if [ -n "${{ inputs.extra-env }}" ]; then
+          while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              export "$line"
+            fi
+          done <<< "${{ inputs.extra-env }}"
+        fi
+        uv run migrate

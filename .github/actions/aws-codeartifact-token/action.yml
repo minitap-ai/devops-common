@@ -1,0 +1,38 @@
+name: AWS CodeArtifact Token
+description: Authenticate to AWS and retrieve a CodeArtifact authorization token
+
+inputs:
+  role-to-assume:
+    required: true
+    description: "IAM role ARN to assume for CodeArtifact read access"
+  aws-region:
+    required: true
+    description: "AWS region where the CodeArtifact domain is hosted"
+  domain:
+    required: true
+    description: "CodeArtifact domain name"
+
+outputs:
+  token:
+    description: "CodeArtifact authorization token"
+    value: ${{ steps.codeartifact.outputs.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Get CodeArtifact token
+      id: codeartifact
+      shell: bash
+      run: |
+        TOKEN=$(aws codeartifact get-authorization-token \
+          --domain ${{ inputs.domain }} \
+          --query authorizationToken \
+          --output text)
+        echo "::add-mask::${TOKEN}"
+        echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"

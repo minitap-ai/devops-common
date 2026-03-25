@@ -13,6 +13,10 @@ inputs:
     required: false
     description: "Supabase service key (optional for some services)"
     default: ""
+  uv-index-minitap-password:
+    required: false
+    description: "Password/token for the Minitap private package index (e.g. CodeArtifact token)"
+    default: ""
   extra-env:
     required: false
     description: "Additional environment variables as KEY=VALUE pairs, one per line"
@@ -31,6 +35,8 @@ runs:
     - name: Install dependencies
       shell: bash
       run: uv sync
+      env:
+        UV_INDEX_MINITAP_PASSWORD: ${{ inputs.uv-index-minitap-password }}
 
     - name: Run migrations
       shell: bash

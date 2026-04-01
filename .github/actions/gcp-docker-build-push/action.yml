@@ -30,6 +30,9 @@ inputs:
     required: false
     description: "Docker build context"
     default: ${{ github.workspace }}
+  build-target:
+    required: false
+    description: "Docker build target"
   build-args:
     required: false
     description: "Docker build argument"
@@ -110,6 +113,7 @@ runs:
       with:
         push: true
         file: ${{ inputs.dockerfile }}
+        target: ${{ inputs.build-target }}
         context: ${{ inputs.build-context }}
         tags: ${{ steps.vars.outputs.tags }}
         build-args: ${{ inputs.build-args }}

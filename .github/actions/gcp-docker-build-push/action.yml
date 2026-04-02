@@ -36,6 +36,9 @@ inputs:
   build-args:
     required: false
     description: "Docker build argument"
+  build-secrets:
+    required: false
+    description: "BuildKit secrets to pass to docker build (newline-separated KEY=VALUE pairs, mounted via --mount=type=secret)"
   cache-key:
     required: false
     description: "Docker build extra cache key - useful for tags involving drastic changes in the image build"
@@ -117,6 +120,7 @@ runs:
         context: ${{ inputs.build-context }}
         tags: ${{ steps.vars.outputs.tags }}
         build-args: ${{ inputs.build-args }}
+        secrets: ${{ inputs.build-secrets }}
         secret-files: |
           netrc=/home/runner/.netrc
         cache-from: type=registry,ref=${{ steps.vars.outputs.cache-image }}

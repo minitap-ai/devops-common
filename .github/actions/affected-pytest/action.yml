@@ -1,0 +1,90 @@
+name: Affected Pytest
+description: >-
+  Run only the pytest tests impacted by a pull request's changed lines, using
+  pytest-impacted (git diff + AST import-graph analysis). On non-PR events
+  (e.g. push to main) it runs the full suite as a safety net. pytest-impacted
+  natively force-runs the whole suite when dependency files (uv.lock,
+  pyproject.toml) or a conftest.py change.
+
+inputs:
+  impacted-module:
+    required: true
+    description: >-
+      Module path passed verbatim to pytest-impacted's --impacted-module.
+      For a src-layout repo use the FULL path including the src/ prefix
+      (e.g. "src/testing_service"); for a flat layout use the package name
+      (e.g. "minitap"). pytest-impacted resolves src/<pkg> to the importable
+      module name automatically.
+  tests-dir:
+    required: false
+    default: tests
+    description: >-
+      Directory holding the test files, passed to --impacted-tests-dir. Required
+      because tests live OUTSIDE the package (flat in tests/), so the dependency
+      graph must be told where they are. Set empty to omit.
+  base-ref:
+    required: false
+    default: main
+    description: "Branch to diff the pull request against when selecting affected tests."
+  pytest-args:
+    required: false
+    default: ""
+    description: >-
+      Extra arguments appended verbatim to every pytest invocation (both the
+      affected and full-suite paths), e.g. -m "not ios_simulator".
+  pre-test:
+    required: false
+    default: ""
+    description: >-
+      Optional shell command run once before pytest (e.g.
+      "cp .env.example .env").
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run full test suite (non-PR safety net)
+      if: github.event_name != 'pull_request'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::notice::Running FULL pytest suite (event: ${{ github.event_name }})"
+        ${{ inputs.pre-test || 'true' }}
+        uv run pytest ${{ inputs.pytest-args }}
+
+    - name: Run affected tests (pull request)
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        set -euo pipefail
+        BASE_REF="${{ inputs.base-ref }}"
+        echo "::notice::Running AFFECTED pytest selection (pytest-impacted, base=${BASE_REF}, module=${{ inputs.impacted-module }})"
+
+        # checkout may be shallow; ensure the base ref is present for branch-mode diff.
+        git fetch --no-tags origin "${BASE_REF}:refs/remotes/origin/${BASE_REF}" 2>/dev/null \
+          || git fetch --no-tags origin "${BASE_REF}"
+
+        TESTS_DIR_ARG=""
+        if [ -n "${{ inputs.tests-dir }}" ]; then
+          TESTS_DIR_ARG="--impacted-tests-dir=${{ inputs.tests-dir }}"
+        fi
+
+        ${{ inputs.pre-test || 'true' }}
+
+        # pytest-impacted deselects unaffected tests; it force-runs ALL tests when
+        # uv.lock / pyproject.toml / a conftest.py changed (dep-file & pytest strategies).
+        # Exit code 5 = "no tests collected" (nothing affected) -> treat as success.
+        set +e
+        uv run pytest \
+          --impacted \
+          --impacted-module="${{ inputs.impacted-module }}" \
+          --impacted-git-mode=branch \
+          --impacted-base-branch="origin/${BASE_REF}" \
+          $TESTS_DIR_ARG \
+          ${{ inputs.pytest-args }}
+        code=$?
+        set -e
+        if [ "$code" -eq 5 ]; then
+          echo "::notice::No affected tests for this change (pytest exit 5) — passing."
+          exit 0
+        fi
+        exit "$code"

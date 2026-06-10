@@ -1,43 +1,30 @@
 name: Affected Pytest
 description: >-
-  Run only the pytest tests impacted by a pull request's changed lines, using
-  pytest-impacted (git diff + AST import-graph analysis). On non-PR events
-  (e.g. push to main) it runs the full suite as a safety net. pytest-impacted
-  natively force-runs the whole suite when dependency files (uv.lock,
-  pyproject.toml) or a conftest.py change.
+  Run only the pytest tests a PR's changed lines impact (pytest-impacted);
+  full suite on non-PR events.
 
 inputs:
   impacted-module:
     required: true
     description: >-
-      Module path passed verbatim to pytest-impacted's --impacted-module.
-      For a src-layout repo use the FULL path including the src/ prefix
-      (e.g. "src/testing_service"); for a flat layout use the package name
-      (e.g. "minitap"). pytest-impacted resolves src/<pkg> to the importable
-      module name automatically.
+      --impacted-module value. Src-layout: full path with src/ prefix
+      (e.g. src/testing_service). Flat-layout: package name (e.g. minitap).
   tests-dir:
     required: false
     default: tests
-    description: >-
-      Directory holding the test files, passed to --impacted-tests-dir. Required
-      because tests live OUTSIDE the package (flat in tests/), so the dependency
-      graph must be told where they are. Set empty to omit.
+    description: "Tests directory (--impacted-tests-dir). Empty to omit."
   base-ref:
     required: false
     default: main
-    description: "Branch to diff the pull request against when selecting affected tests."
+    description: "Branch the PR is diffed against to select affected tests."
   pytest-args:
     required: false
     default: ""
-    description: >-
-      Extra arguments appended verbatim to every pytest invocation (both the
-      affected and full-suite paths), e.g. -m "not ios_simulator".
+    description: 'Args appended to every pytest run, e.g. -m "not ios_simulator".'
   pre-test:
     required: false
     default: ""
-    description: >-
-      Optional shell command run once before pytest (e.g.
-      "cp .env.example .env").
+    description: "Shell command run before pytest, e.g. cp .env.example .env."
 
 runs:
   using: "composite"

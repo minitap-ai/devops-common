@@ -54,14 +54,14 @@ This action builds a Docker image and pushes it to the Google Cloud Platform (GC
 
 ### Affected Pytest
 
-Runs only the pytest tests impacted by a pull request's changed lines, using [`pytest-impacted`](https://github.com/promptromp/pytest-impacted) (git diff + AST import-graph analysis). This makes the PR test check dramatically faster on large suites by skipping tests that the change cannot affect.
+Runs only the pytest tests a PR's changed lines impact, via [`pytest-impacted`](https://github.com/promptromp/pytest-impacted) (git diff + AST import-graph). Skips tests the change can't affect, so the PR check stays fast on large suites.
 
 Behaviour:
-- **On `pull_request` events:** selects and runs only the affected tests (diff against `base-ref`). If nothing is affected (pytest exit code 5), the step passes.
-- **On any other event (e.g. `push` to `main`):** runs the **full** test suite as a safety net, so anything the per-PR selection might miss is always caught before it lands.
-- **Force-run-all triggers (native to `pytest-impacted`):** when dependency files (`uv.lock`, `pyproject.toml`, …) change, the whole suite runs; when a `conftest.py` changes, all tests in its directory and subdirectories run.
+- **`pull_request`:** runs only affected tests (diff vs `base-ref`); passes if none are affected.
+- **Other events (e.g. `push` to `main`):** runs the **full** suite as a safety net.
+- **Force-all (native to `pytest-impacted`):** a dependency file (`uv.lock`, `pyproject.toml`, …) change runs everything; a `conftest.py` change runs all tests under its directory.
 
-Requires `pytest-impacted` to be installed as a dev dependency in the consuming repo (`uv add --dev pytest-impacted`).
+Requires `pytest-impacted` as a dev dependency in the consuming repo (`uv add --dev pytest-impacted`).
 
 #### Usage
 
@@ -83,8 +83,8 @@ Requires `pytest-impacted` to be installed as a dev dependency in the consuming 
 
 #### Inputs
 
-- `impacted-module` (required): Module path passed to `pytest-impacted`'s `--impacted-module`. For a **src-layout** repo use the full path including the `src/` prefix (e.g. `src/testing_service`); for a **flat-layout** repo use the package name (e.g. `minitap`). The plugin resolves `src/<pkg>` to the importable module name automatically.
-- `tests-dir` (optional, default `tests`): Directory holding the test files (`--impacted-tests-dir`). Required when tests live outside the package so the dependency graph can include them. Set empty to omit.
-- `base-ref` (optional, default `main`): Branch to diff the pull request against when selecting affected tests.
-- `pytest-args` (optional, default empty): Extra arguments appended verbatim to every pytest invocation (both the affected and full-suite paths), e.g. `-m "not ios_simulator"`.
-- `pre-test` (optional, default empty): Shell command run once before pytest, e.g. `cp .env.example .env`.
+- `impacted-module` (required): `--impacted-module` value. Src-layout: full path with `src/` prefix (e.g. `src/testing_service`). Flat-layout: package name (e.g. `minitap`).
+- `tests-dir` (optional, default `tests`): tests directory (`--impacted-tests-dir`); empty to omit.
+- `base-ref` (optional, default `main`): branch the PR is diffed against.
+- `pytest-args` (optional, default empty): args appended to every pytest run, e.g. `-m "not ios_simulator"`.
+- `pre-test` (optional, default empty): shell command run before pytest, e.g. `cp .env.example .env`.
